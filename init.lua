@@ -91,7 +91,7 @@ vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
 
 -- Set to true if you have a Nerd Font installed and selected in the terminal
-vim.g.have_nerd_font = false
+vim.g.have_nerd_font = true
 
 -- [[ Setting options ]]
 -- See `:help vim.opt`
@@ -103,6 +103,10 @@ vim.opt.number = true
 -- You can also add relative line numbers, to help with jumping.
 --  Experiment for yourself to see if you like it!
 -- vim.opt.relativenumber = true
+
+-- Show filename in terminal title
+vim.opt.title = true
+vim.opt.titlestring = '%f'  -- %t = filename, %f = relative path, %F = full path
 
 -- Enable mouse mode, can be useful for resizing splits for example!
 vim.opt.mouse = 'a'
@@ -227,9 +231,28 @@ vim.opt.rtp:prepend(lazypath)
 --    :Lazy update
 --
 -- NOTE: Here is where you install your plugins.
+-- Suppress deprecation warnings from plugins
+vim.deprecate = function() end
+
+-- llama.vim config
+vim.g.llama_config = {
+  endpoint = "http://127.0.0.1:8080/completion",
+  max_tokens = 100,
+  temperature = 0.2,
+}
+
+-- Disable llama.vim in Telescope prompts
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = 'TelescopePrompt',
+  callback = function()
+    vim.b.llama_disable = 1
+  end,
+})
+
 require('lazy').setup({
   -- NOTE: Plugins can be added with a link (or for a github repo: 'owner/repo' link).
   'tpope/vim-sleuth', -- Detect tabstop and shiftwidth automatically
+  'ggml-org/llama.vim', -- Local LLM code completion
 
   -- NOTE: Plugins can also be added by using a table,
   -- with the first argument being the link and the following
@@ -411,6 +434,10 @@ require('lazy').setup({
       vim.keymap.set('n', '<leader>sr', builtin.resume, { desc = '[S]earch [R]esume' })
       vim.keymap.set('n', '<leader>s.', builtin.oldfiles, { desc = '[S]earch Recent Files ("." for repeat)' })
       vim.keymap.set('n', '<leader><leader>', builtin.buffers, { desc = '[ ] Find existing buffers' })
+      -- vim.keymap.set('n', '<leader>ff', builtin.find_files, { desc = 'Telescope find files' })
+      -- vim.keymap.set('n', '<leader>fg', builtin.live_grep, { desc = 'Telescope live grep' })
+      -- vim.keymap.set('n', '<leader>fb', builtin.buffers, { desc = 'Telescope buffers' })
+      -- vim.keymap.set('n', '<leader>fh', builtin.help_tags, { desc = 'Telescope help tags' })
 
       -- Slightly advanced example of overriding default behavior and theme
       vim.keymap.set('n', '<leader>/', function()
@@ -588,6 +615,33 @@ require('lazy').setup({
         end,
       })
 
+      -- Suppress false positive "unused import" warnings in Astro files
+      vim.api.nvim_create_autocmd('LspAttach', {
+        group = vim.api.nvim_create_augroup('astro-unused-imports-filter', { clear = true }),
+        callback = function(args)
+          local client = vim.lsp.get_client_by_id(args.data.client_id)
+          if client and client.name == 'astro' then
+            local ns = vim.lsp.diagnostic.get_namespace(args.data.client_id, true)
+            vim.diagnostic.config({
+              virtual_text = {
+                format = function(diagnostic)
+                  -- Hide TypeScript "unused" diagnostics that are false positives in .astro
+                  if diagnostic.message:match("is declared but") or
+                     diagnostic.message:match("never used") or
+                     diagnostic.code == 6133 or diagnostic.code == '6133' then
+                    return nil
+                  end
+                  return diagnostic.message
+                end
+              },
+              signs = {
+                severity = { min = vim.diagnostic.severity.WARN }  -- Keep sign column cleaner
+              }
+            }, ns)
+          end
+        end,
+      })
+
       -- LSP servers and clients are able to communicate to each other what features they support.
       --  By default, Neovim doesn't support everything that is in the LSP specification.
       --  When you add nvim-cmp, luasnip, etc. Neovim now has *more* capabilities.
@@ -617,6 +671,8 @@ require('lazy').setup({
         -- But for many setups, the LSP (`ts_ls`) will work just fine
         -- ts_ls = {},
         --
+
+        astro = {},
 
         lua_ls = {
           -- cmd = {...},
@@ -779,7 +835,7 @@ require('lazy').setup({
 
           -- If you prefer more traditional completion keymaps,
           -- you can uncomment the following lines
-          --['<CR>'] = cmp.mapping.confirm { select = true },
+          ['<CR>'] = cmp.mapping.confirm { select = true },
           --['<Tab>'] = cmp.mapping.select_next_item(),
           --['<S-Tab>'] = cmp.mapping.select_prev_item(),
 
